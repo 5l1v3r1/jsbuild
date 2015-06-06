@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 )
 
+const dependencyKeyword = "dependency "
+
 type ScriptFile struct {
 	Path         string
 	Dependencies []string
@@ -44,6 +46,13 @@ func ReadScriptFile(path string) (*ScriptFile, error) {
 
 func parseDependencyComments(script []byte) ([]string, error) {
 	scriptStr := string(script)
-	// TODO: this
-	return nil, nil
+	lines := strings.Split(string(script), "\n")
+	result := []string{}
+	for i, untrimmedLine := range lines {
+		line := strings.TrimSpace(untrimmedLine)
+		if strings.HasPrefix(line, dependencyKeyword) {
+			result = append(result, line[len(dependencyKeyword):])
+		}
+	}
+	return result, nil
 }
