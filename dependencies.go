@@ -103,6 +103,7 @@ func (d *DepGraph) TopologicalSort() ([]string, error) {
 	// This is an implementation of Kahn's topological sorting algorithm.
 
 	bottomNodes := make([]*depGraphNode, 0, len(d.nodes))
+OuterLoop:
 	for _, node := range d.nodes {
 		for _, edge := range node.edges {
 			if edge.dependent == node {
