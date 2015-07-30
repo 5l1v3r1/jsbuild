@@ -10,11 +10,15 @@ import (
 
 const dependencyKeyword = "//deps "
 
+// A ScriptFile holds both the clean absolute path to a script and the clean absolute paths its
+// dependencies.
 type ScriptFile struct {
 	Path         string
 	Dependencies []string
 }
 
+// ReadScriptFile generates a script file and reads the file's dependencies from its heading
+// comment.
 func ReadScriptFile(path string) (*ScriptFile, error) {
 	absPath, err := filepath.Abs(path)
 	if err != nil {
@@ -67,7 +71,9 @@ type DepGraph struct {
 	nodes []*depGraphNode
 }
 
-func NewDepGraph(scriptFiles []ScriptFile) (*DepGraph, error) {
+// NewDepGraph creates a dependency graph from an array of *ScriptFiles.
+// This will fail if a dependency is listed which is not included in the script files list.
+func NewDepGraph(scriptFiles []*ScriptFile) (*DepGraph, error) {
 	nodes := make([]*depGraphNode, len(scriptFiles))
 	nodesPerPath := map[string]*depGraphNode{}
 	for i, f := range scriptFiles {
