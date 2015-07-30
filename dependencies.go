@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -58,4 +59,42 @@ func parseDependencyComments(script []byte) ([]string, error) {
 		}
 	}
 	return result, nil
+}
+
+// A DepGraph represents a graph of source files. The edges in the graph are their dependencies.
+// Using a DepGraph, it is possible to perform a topological sort.
+type DepGraph struct {
+	nodes []*depGraphNode
+}
+
+func NewDepGraph(scriptFiles []ScriptFile) (*DepGraph, error) {
+	nodes := make([]*depGraphNode, len(scriptFiles))
+	nodesPerPath := map[string]*depGraphNode{}
+	for i, f := range scriptFiles {
+		nodes[i] = &depGraphNode{[]*depGraphEdge{}, f.Path}
+		nodesPerPath[f.Path] = nodes[i]
+	}
+	for _, f := range scriptFiles {
+		for _, dep := range f.Dependencies {
+			if depNode, ok := nodesPerPath[dep]; !ok {
+				return nil, errors.New("dependency not included: " + dep)
+			} else {
+				thisNode := nodesPerPath[f.Path]
+				edge := &depGraphEdge{thisNode, nodesPerPath[dep]}
+				depNode.edges = append(depNode.edges, edge)
+				thisNode.edges = append(thisNode.edges, edge)
+			}
+		}
+	}
+	return &DepGraph{nodes}, nil
+}
+
+type depGraphNode struct {
+	edges []*depGraphEdge
+	path  string
+}
+
+type depGraphEdge struct {
+	dependent  *depGraphNode
+	dependency *depGraphNode
 }
