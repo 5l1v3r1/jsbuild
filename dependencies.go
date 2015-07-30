@@ -89,6 +89,57 @@ func NewDepGraph(scriptFiles []ScriptFile) (*DepGraph, error) {
 	return &DepGraph{nodes}, nil
 }
 
+// TopologicalSort sorts the files in this graph and returns an ordered list of file paths. A file
+// path will always appear in the list before all of its dependents.
+// If the graph cannot be topologically sorted, an error will be returned.
+// The receiving DepGraph will be destroyed in the process of topological sorting.
+func (d *DepGraph) TopologicalSort() ([]string, error) {
+	// This is an implementation of Kahn's topological sorting algorithm.
+
+	bottomNodes := make([]*depGraphNode, 0, len(d.nodes))
+	for _, node := range d.nodes {
+		for _, edge := range node.edges {
+			if edge.dependent == node {
+				continue OuterLoop
+			}
+		}
+		bottomNodes = append(bottomNodes, node)
+	}
+
+	sources := make([]string, 0, len(d.nodes))
+	for len(bottomNodes) > 0 {
+		node := bottomNodes[len(bottomNodes)-1]
+		sources = append(sources, node.path)
+		bottomNodes = bottomNodes[0 : len(bottomNodes)-1]
+		edges := node.edges
+		d.removeNode(node)
+		for _, edge := range edges {
+			if len(edge.dependent.edges) == 0 {
+				bottomNodes = append(bottomNodes, edge.dependent)
+			}
+		}
+	}
+
+	if len(d.nodes) > 0 {
+		return nil, errors.New("the graph is not acyclic")
+	} else {
+		return sources, nil
+	}
+}
+
+func (d *DepGraph) removeNode(node *depGraphNode) {
+	for i, aNode := range d.nodes {
+		if aNode == node {
+			d.nodes[i] = d.nodes[len(d.nodes)-1]
+			d.nodes = d.nodes[:len(d.nodes)-1]
+			break
+		}
+	}
+	for _, edge := range node.edges {
+		edge.remove()
+	}
+}
+
 type depGraphNode struct {
 	edges []*depGraphEdge
 	path  string
@@ -97,4 +148,16 @@ type depGraphNode struct {
 type depGraphEdge struct {
 	dependent  *depGraphNode
 	dependency *depGraphNode
+}
+
+func (e *depGraphEdge) remove() {
+	for _, node := range []*depGraphNode{e.dependent, e.dependency} {
+		for i, edge := range node.edges {
+			if edge == e {
+				node.edges[i] = node.edges[len(node.edges)-1]
+				node.edges = node.edges[:len(node.edges)-1]
+				break
+			}
+		}
+	}
 }
