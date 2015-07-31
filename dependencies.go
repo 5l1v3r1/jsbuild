@@ -118,10 +118,11 @@ OuterLoop:
 		node := bottomNodes[len(bottomNodes)-1]
 		sources = append(sources, node.path)
 		bottomNodes = bottomNodes[0 : len(bottomNodes)-1]
-		edges := node.edges
+		edges := make([]*depGraphEdge, len(node.edges))
+		copy(edges, node.edges)
 		d.removeNode(node)
 		for _, edge := range edges {
-			if len(edge.dependent.edges) == 0 {
+			if !edge.dependent.hasDependencies() {
 				bottomNodes = append(bottomNodes, edge.dependent)
 			}
 		}
@@ -150,6 +151,15 @@ func (d *DepGraph) removeNode(node *depGraphNode) {
 type depGraphNode struct {
 	edges []*depGraphEdge
 	path  string
+}
+
+func (n *depGraphNode) hasDependencies() bool {
+	for _, e := range n.edges {
+		if e.dependent == n {
+			return true
+		}
+	}
+	return false
 }
 
 type depGraphEdge struct {
