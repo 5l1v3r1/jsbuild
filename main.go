@@ -61,9 +61,27 @@ func generateCodeBody(name, version, licenseFile string, files []string) ([]byte
 		return nil, err
 	}
 
-	data := []byte("(function() {\n")
+	data := []byte("(function() {\n\n  var exports;\n")
 
-	// TODO: write exports code.
+	for i, rootName := range []string{"window", "self"} {
+		if i != 0 {
+			data = append(data, []byte(" else ")...)
+		} else {
+			data = append(data, []byte("  ")...)
+		}
+		data = append(data, []byte("if ('undefined' !== typeof " + rootName + ") {\n")...)
+		data = append(data, []byte(packageExportsCode(name, rootName))...)
+		data = append(data, []byte("  }")...)
+	}
+	
+	data = append(data, []byte(` else if ('undefined' !== typeof module) {
+    if (!module.exports) {
+      module.exports = {};
+    }
+    exports = module.exports;
+  }
+
+`)...)
 
 	for _, filePath := range sortedPaths {
 		if fileData, err := ioutil.ReadFile(filePath); err != nil {
@@ -82,4 +100,15 @@ func generateCodeBody(name, version, licenseFile string, files []string) ([]byte
 	}
 
 	return append(data, []byte("\n})();\n")...), nil
+}
+
+func packageExportsCode(name, rootName string) string {
+	comps := strings.Split(name, ".")
+	var res string
+	for i := 1; i <= len(comps); i++ {
+		strName := rootName + "." + strings.Join(comps[:i], ".")
+		res = res + "    if (!" + strName + ") {\n      " + strName + " = {};\n    }\n"
+	}
+	res = res + "    exports = " + rootName + "." + name + ";\n"
+	return res
 }
