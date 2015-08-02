@@ -1,114 +1,113 @@
 package main
 
 import (
+	"bytes"
 	"flag"
 	"io/ioutil"
 	"log"
-	"strings"
 )
 
 func main() {
-	name := flag.String("name", "package", "the package name")
+	name := flag.String("name", "app", "the package name")
 	version := flag.String("version", "", "the version name")
 	licenseFile := flag.String("license", "", "the filename for the license")
 	output := flag.String("output", "built.js", "the destination file")
 	flag.Parse()
 
-	var data []byte
+	if len(flag.Args()) == 0 {
+		log.Fatal("no input files")
+	}
+
+	var res bytes.Buffer
+
+	if *version != "" {
+		res.WriteString(CommentOut(*name+" version "+*version) + "\n")
+	}
+
+	if *version != "" && *licenseFile != "" {
+		res.WriteString("//\n")
+	}
+
 	if *licenseFile != "" {
 		if licenseData, err := ioutil.ReadFile(*licenseFile); err != nil {
 			log.Fatal(err)
 		} else {
-			licenseStr := string(licenseData)
-			licenseLines := strings.Split(licenseStr, "\n")
-			for i, line := range licenseLines {
-				licenseLines[i] = "// " + line
-			}
-			data = append([]byte(strings.Join(licenseLines, "\n")+"\n"), data...)
+			res.WriteString(CommentOut(string(licenseData)))
+			res.WriteString("\n")
 		}
 	}
-	if *version != "" {
-		data = append([]byte("// "+*name+" version "+*version+"\n\n"), data...)
+
+	res.WriteString("(function() {\n\n")
+	res.WriteString(IndentCode("  ", GenerateExportsCode(*name)))
+	res.WriteString("\n\n")
+
+	scriptFiles := make([]*ScriptFile, len(flag.Args()))
+	for i, file := range flag.Args() {
+		var err error
+		if scriptFiles[i], err = ReadScriptFile(file); err != nil {
+			log.Fatal(err)
+		}
+	}
+	depGraph, err := NewDepGraph(scriptFiles)
+	if err != nil {
+		log.Fatal(err)
+	}
+	sortedPaths, err := depGraph.TopologicalSort()
+	if err != nil {
+		log.Fatal(err)
 	}
 
-	if body, err := generateCodeBody(*name, *version, *licenseFile, flag.Args()); err != nil {
+	if fileData, err := JoinSourceFiles(sortedPaths); err != nil {
 		log.Fatal(err)
 	} else {
-		data = append(data, body...)
+		res.WriteString(IndentCode("  ", string(fileData)))
 	}
 
-	if err := ioutil.WriteFile(*output, data, 0755); err != nil {
+	res.WriteString("\n}\n")
+
+	finishedCode := []byte(CleanEmptyLines(res.String()))
+	if err := ioutil.WriteFile(*output, finishedCode, 0755); err != nil {
 		log.Fatal(err)
 	}
 
 	log.Print("done!")
 }
 
-func generateCodeBody(name, version, licenseFile string, files []string) ([]byte, error) {
-	scriptFiles := make([]*ScriptFile, len(files))
-	for i, file := range files {
-		var err error
-		if scriptFiles[i], err = ReadScriptFile(file); err != nil {
-			return nil, err
-		}
-	}
-	depGraph, err := NewDepGraph(scriptFiles)
-	if err != nil {
-		return nil, err
-	}
-	sortedPaths, err := depGraph.TopologicalSort()
-	if err != nil {
-		return nil, err
+// GenerateExportsCode creates the code which makes an "exports" variable.
+func GenerateExportsCode(packageName string) string {
+	var res bytes.Buffer
+	res.WriteString("var exports;\n")
+
+	ifStatement := IfStatement{}
+	for _, object := range []string{"self", "window"} {
+		pn := PackageName(object + "." + packageName)
+		condition := "'undefined' !== typeof " + object
+		ifStatement.Conditions = append(ifStatement.Conditions, condition)
+
+		code := pn.CreationCode() + "\nexports = " + object + "." + packageName + ";"
+		ifStatement.Blocks = append(ifStatement.Blocks, code)
 	}
 
-	data := []byte("(function() {\n\n  var exports;\n")
+	ifStatement.Conditions = append(ifStatement.Conditions, "'undefined' !== typeof module")
+	ifStatement.Blocks = append(ifStatement.Blocks, "exports = module.exports;")
 
-	for i, rootName := range []string{"window", "self"} {
-		if i != 0 {
-			data = append(data, []byte(" else ")...)
-		} else {
-			data = append(data, []byte("  ")...)
-		}
-		data = append(data, []byte("if ('undefined' !== typeof "+rootName+") {\n")...)
-		data = append(data, []byte(packageExportsCode(name, rootName))...)
-		data = append(data, []byte("  }")...)
-	}
+	res.WriteString(ifStatement.String())
 
-	data = append(data, []byte(` else if ('undefined' !== typeof module) {
-    if (!module.exports) {
-      module.exports = {};
-    }
-    exports = module.exports;
-  }
-
-`)...)
-
-	for _, filePath := range sortedPaths {
-		if fileData, err := ioutil.ReadFile(filePath); err != nil {
-			return nil, err
-		} else {
-			lines := strings.Split(string(fileData), "\n")
-			for i, line := range lines {
-				line = "  " + line
-				if strings.TrimSpace(line) == "" {
-					line = ""
-				}
-				lines[i] = line
-			}
-			data = append(data, []byte(strings.Join(lines, "\n"))...)
-		}
-	}
-
-	return append(data, []byte("\n})();\n")...), nil
+	return res.String()
 }
 
-func packageExportsCode(name, rootName string) string {
-	comps := strings.Split(name, ".")
-	var res string
-	for i := 1; i <= len(comps); i++ {
-		strName := rootName + "." + strings.Join(comps[:i], ".")
-		res = res + "    if (!" + strName + ") {\n      " + strName + " = {};\n    }\n"
+// JoinSourceFiles reads source files from paths and joins them together.
+func JoinSourceFiles(sourceFiles []string) (string, error) {
+	var buf bytes.Buffer
+
+	for _, filePath := range sourceFiles {
+		if fileData, err := ioutil.ReadFile(filePath); err != nil {
+			return "", err
+		} else {
+			buf.Write(fileData)
+			buf.WriteString("\n\n")
+		}
 	}
-	res = res + "    exports = " + rootName + "." + name + ";\n"
-	return res
+
+	return buf.String(), nil
 }
