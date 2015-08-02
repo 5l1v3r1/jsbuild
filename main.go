@@ -69,11 +69,11 @@ func generateCodeBody(name, version, licenseFile string, files []string) ([]byte
 		} else {
 			data = append(data, []byte("  ")...)
 		}
-		data = append(data, []byte("if ('undefined' !== typeof " + rootName + ") {\n")...)
+		data = append(data, []byte("if ('undefined' !== typeof "+rootName+") {\n")...)
 		data = append(data, []byte(packageExportsCode(name, rootName))...)
 		data = append(data, []byte("  }")...)
 	}
-	
+
 	data = append(data, []byte(` else if ('undefined' !== typeof module) {
     if (!module.exports) {
       module.exports = {};
