@@ -63,7 +63,7 @@ func main() {
 		res.WriteString(IndentCode("  ", string(fileData)))
 	}
 
-	res.WriteString("\n}\n")
+	res.WriteString("\n})();\n")
 
 	finishedCode := []byte(CleanEmptyLines(res.String()))
 	if err := ioutil.WriteFile(*output, finishedCode, 0755); err != nil {
