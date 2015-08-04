@@ -1,6 +1,6 @@
-# build.js
+# jsbuild
 
-**build.js** will be a generic tool to compile large JavaScript projects and manage dependencies both within projects and across projects.
+**jsbuild** is a generic tool to compile large JavaScript projects and manage dependencies both within projects and across projects.
 
 # Overview
 
@@ -8,7 +8,7 @@ As I developed more and more JavaScript libraries for the web, I grew to use a v
 
 # LICENSE
 
-**build.js** is licensed under the Don't Be A Dick Public License.
+**jsbuild** is licensed under the Don't Be A Dick Public License.
 
 > DON'T BE A DICK PUBLIC LICENSE
 > TERMS AND CONDITIONS FOR COPYING, DISTRIBUTION AND MODIFICATION
