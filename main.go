@@ -5,6 +5,7 @@ import (
 	"flag"
 	"io/ioutil"
 	"log"
+	"strings"
 )
 
 func main() {
@@ -12,6 +13,7 @@ func main() {
 	version := flag.String("version", "", "the version name")
 	licenseFile := flag.String("license", "", "the filename for the license")
 	output := flag.String("output", "built.js", "the destination file")
+	includeAPI := flag.Bool("includeAPI", false, "expose an includeAPI() function")
 	flag.Parse()
 
 	if len(flag.Args()) == 0 {
@@ -40,6 +42,11 @@ func main() {
 	res.WriteString("(function() {\n\n")
 	res.WriteString(IndentCode("  ", GenerateExportsCode(*name)))
 	res.WriteString("\n\n")
+
+	if *includeAPI {
+		res.WriteString(IndentCode("  ", GenerateIncludeAPICode(*name)))
+		res.WriteString("\n\n")
+	}
 
 	scriptFiles := make([]*ScriptFile, len(flag.Args()))
 	for i, file := range flag.Args() {
@@ -94,6 +101,29 @@ func GenerateExportsCode(packageName string) string {
 	res.WriteString(ifStatement.String())
 
 	return res.String()
+}
+
+// GenerateIncludeAPICode generates the code for the includeAPI function.
+func GenerateIncludeAPICode(name string) string {
+	comps := strings.Split(name, ".")
+	comps = comps[:len(comps)-1]
+
+	var ifStatement IfStatement
+	for _, object := range []string{"self", "window"} {
+		objName := strings.Join(append([]string{object}, comps...), ".")
+		cond := "'undefined' !== typeof " + object
+		ifStatement.Conditions = append(ifStatement.Conditions, cond)
+		ifStatement.Blocks = append(ifStatement.Blocks, "return "+objName+"[name];")
+	}
+	ifStatement.Conditions = append(ifStatement.Conditions, "'function' === typeof require")
+	ifStatement.Blocks = append(ifStatement.Blocks, "return require('./' + name + '.js');")
+
+	var buffer bytes.Buffer
+	buffer.WriteString("function includeAPI(name) {\n")
+	buffer.WriteString(IndentCode("  ", ifStatement.String()))
+	buffer.WriteString("\n  throw new Error('cannot include packages');\n")
+	buffer.WriteString("}")
+	return buffer.String()
 }
 
 // JoinSourceFiles reads source files from paths and joins them together.
